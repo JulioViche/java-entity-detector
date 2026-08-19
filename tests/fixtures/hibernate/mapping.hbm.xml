@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-mapping PUBLIC
+    "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+    "http://www.hibernate.org/dtd/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping>
+
+    <class name="com.ejemplo.model.ClienteHibernate"
+           table="CLIENTES_HIB">
+
+        <id name="id" column="ID_CLIENTE" type="java.lang.Long">
+            <generator class="identity"/>
+        </id>
+
+        <property name="nombre"
+                  column="NOMBRE"
+                  type="java.lang.String"
+                  length="100"
+                  not-null="true"/>
+
+        <property name="email"
+                  column="EMAIL"
+                  type="java.lang.String"
+                  unique="true"/>
+
+        <many-to-one name="zona"
+                     class="com.ejemplo.model.ZonaHibernate"
+                     column="ID_ZONA"
+                     not-null="false"/>
+
+        <one-to-many name="pedidos"
+                     class="com.ejemplo.model.PedidoHibernate"
+                     column="ID_CLIENTE"/>
+
+    </class>
+
+    <class name="com.ejemplo.model.PedidoHibernate"
+           table="PEDIDOS_HIB">
+
+        <id name="id" column="ID_PEDIDO" type="java.lang.Long">
+            <generator class="identity"/>
+        </id>
+
+        <property name="fecha"
+                  column="FECHA"
+                  type="java.util.Date"/>
+
+        <property name="monto"
+                  column="MONTO"
+                  type="java.math.BigDecimal"/>
+
+        <many-to-one name="cliente"
+                     class="com.ejemplo.model.ClienteHibernate"
+                     column="ID_CLIENTE"
+                     not-null="true"/>
+
+        <many-to-many name="productos"
+                      class="com.ejemplo.model.ProductoHibernate"
+                      table="PEDIDO_PRODUCTOS_HIB"
+                      column="ID_PEDIDO"/>
+
+    </class>
+
+    <class name="com.ejemplo.model.ProductoHibernate"
+           table="PRODUCTOS_HIB">
+
+        <id name="id" column="ID_PRODUCTO" type="java.lang.Long">
+            <generator class="assigned"/>
+        </id>
+
+        <property name="nombre"
+                  column="NOMBRE"
+                  type="java.lang.String"
+                  length="200"/>
+
+    </class>
+
+</hibernate-mapping>
