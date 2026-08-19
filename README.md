@@ -220,17 +220,111 @@ tests/
 
 ### Flujo de ejecucion
 
-```
-repositorios/
-  └── repo/
-      ├── *.java  ──> java_jpa_parser.py  ──> Entity, Embeddable, MappedSuperclass
-      └── *.hbm.xml ──> hibernate_xml_parser.py ──> Entity
-                                    │
-                                    v
-                              scanner.py  ──> ScanResult
-                                    │
-                                    v
-                            detect_entities.py ──> JSON
+```mermaid
+flowchart TD
+    subgraph CLI["CLI - detect_entities.py"]
+        A1["python detect_entities.py -r ./repos -o out.json"] --> A2["build_parser: parsea argumentos"]
+        A2 --> A3{"Directorios existen?"}
+        A3 -->|"No"| A4["ERROR: sys.exit 1"]
+        A3 -->|"Si"| A5["Para cada repo_root en args.repos"]
+    end
+
+    subgraph SCAN["Scanner - scanner.py"]
+        A5 --> B1["scan_all: busca subdirectorios como repos"]
+        B1 --> B2["Para cada repo, llama scan_repository"]
+        B2 --> B3["rglob *.java"]
+        B2 --> B4["rglob *.hbm.xml"]
+    end
+
+    subgraph JAVA["Java JPA Parser - java_jpa_parser.py"]
+        B3 --> C1["parse_java_file: lee y parsea con Tree-sitter"]
+        C1 --> C2["Extrae package e imports"]
+        C2 --> C3["Busca class_declaration en AST"]
+        C3 --> C4{"Clasifica anotaciones"}
+        C4 -->|"@Entity"| C5["build entity"]
+        C4 -->|"@Embeddable"| C6["build embeddable"]
+        C4 -->|"@MappedSuperclass"| C7["build mapped superclass"]
+        C4 -->|"Otra clase"| C8["Ignora"]
+        C5 --> C9["Extrae campos con extract_fields"]
+        C5 --> C10["Extrae relaciones con extract_relations"]
+        C5 --> C11["Extrae herencia con extract_inheritance"]
+        C9 --> C12["Para cada field_declaration"]
+        C12 --> C13["get_annotations: extrae @Column, @Id"]
+        C13 --> C14["annotation_argument: extrae nombre, length, nullable"]
+        C10 --> C15["Para cada field_declaration"]
+        C15 --> C16["Busca @OneToOne/@OneToMany/@ManyToOne/@ManyToMany"]
+        C16 --> C17["resolve_relation_target: extrae tipo destino"]
+        C17 --> C18["Extrae @JoinColumn/@JoinTable"]
+    end
+
+    subgraph HIBERNATE["Hibernate XML Parser - hibernate_xml_parser.py"]
+        B4 --> D1["parse_hibernate_xml: parsea con ElementTree"]
+        D1 --> D2["Busca elementos class/subclass"]
+        D2 --> D3["Para cada class: parse_hibernate_class"]
+        D3 --> D4["Extrae name y table"]
+        D4 --> D5{"Elementos hijos"}
+        D5 -->|"id"| D6["parse_id_element: campo PK"]
+        D5 -->|"property"| D7["parse_property_element: campo normal"]
+        D5 -->|"many-to-one"| D8["parse_many_to_one: relacion N:1"]
+        D5 -->|"one-to-many"| D9["parse_one_to_many: relacion 1:N"]
+        D5 -->|"many-to-many"| D10["parse_many_to_many: relacion N:M"]
+        D5 -->|"one-to-one"| D11["parse_one_to_one: relacion 1:1"]
+        D5 -->|"join"| D12["Parsea campos adicionales de join"]
+    end
+
+    subgraph MODELS["Models - models.py"]
+        C18 --> E1["Entity"]
+        C6 --> E2["Embeddable"]
+        C7 --> E3["MappedSuperclass"]
+        C14 --> E4["Field"]
+        C18 --> E5["Relation"]
+        D3 --> E1
+        D6 --> E4
+        D7 --> E4
+        D8 --> E5
+        D9 --> E5
+        D10 --> E5
+        D11 --> E5
+    end
+
+    subgraph UTILS["Utils - utils.py"]
+        C1 --> F1["PARSER: Tree-sitter global"]
+        C1 --> F2["read_bytes: lee archivo"]
+        C13 --> F3["get_annotations: extrae del AST"]
+        F3 --> F4["extract_annotation_name: limpia FQN"]
+        C14 --> F5["annotation_argument: regex para valores"]
+        C17 --> F6["extract_generic_inner_type: resuelve generics"]
+        C9 --> F7["extract_type: tipo del campo"]
+    end
+
+    subgraph OUTPUT["Salida - detect_entities.py"]
+        E1 --> G1["Acumula en listas"]
+        E2 --> G1
+        E3 --> G1
+        G1 --> G2["Construye dict output con summary"]
+        G2 --> G3{"args.output?"}
+        G3 -->|"Si"| G4["write_text: escribe JSON a archivo"]
+        G3 -->|"No"| G5["print: imprime en stdout"]
+        G4 --> G6["Resumen: X entidades, Y embeddables, Z mapped"]
+        G5 --> G6
+    end
+
+    subgraph DATA["Estructuras de Datos"]
+        E1 --> H1["Entity: name, table, type, FQN, fields, relations"]
+        E4 --> H2["Field: name, type, column, PK, nullable, length"]
+        E5 --> H3["Relation: field, target, cardinality, join_column"]
+        E2 --> H4["Embeddable: name, FQN, fields"]
+        E3 --> H5["MappedSuperclass: name, FQN, fields"]
+    end
+
+    style CLI fill:#e1f5fe,stroke:#0288d1
+    style SCAN fill:#f3e5f5,stroke:#7b1fa2
+    style JAVA fill:#e8f5e9,stroke:#388e3c
+    style HIBERNATE fill:#fff3e0,stroke:#f57c00
+    style MODELS fill:#fce4ec,stroke:#c62828
+    style UTILS fill:#f5f5f5,stroke:#616161
+    style OUTPUT fill:#e0f7fa,stroke:#00838f
+    style DATA fill:#fff9c4,stroke:#f9a825
 ```
 
 ### Por que Tree-sitter?
